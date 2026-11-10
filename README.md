@@ -72,6 +72,8 @@ FLAGS
   -v, --version                      Print version.
   -c, --config STRING                Path to config file. (default: /home/louis/.pug.yaml)
       --disable-reload-after-apply   Disable automatic reload of state following an apply.
+      --include STRING               Glob pattern of directories in which to search for modules. Can set more than once. (default: **/*)
+      --exclude STRING               Glob pattern of directories to exclude from search for modules. Takes precedence over --include. Can set more than once. (default: **/.terraform,**/.terragrunt-cache)
   -l, --log-level STRING             Logging level (valid: info,debug,error,warn). (default: info)
 ```
 
@@ -258,6 +260,17 @@ Common vim key bindings are supported for navigating task output.
 ### Module
 
 A module is a directory of terraform configuration with a backend configuration. When Pug starts up, it looks recursively within the working directory, walking each directory and parsing any terraform configuration it finds. If the configuration contains a [state backend definition](https://developer.hashicorp.com/terraform/language/settings/backends/configuration) then Pug loads the directory as a module.
+
+Use `--include` and `--exclude` to control which directories are searched. Each is a [glob pattern](https://github.com/bmatcuk/doublestar#patterns) relative to the working directory, supporting `**` to match any number of directories, and can be set more than once. A pattern matching a directory also applies to everything beneath it. A directory is searched if it matches an include pattern and no exclude pattern; excluded directories are skipped entirely. Setting either flag replaces its default, so add the defaults back if you still want them, e.g. in the config file:
+
+```yaml
+include:
+  - live
+exclude:
+  - "**/.terraform"
+  - "**/.terragrunt-cache"
+  - "**/examples"
+```
 
 Each module has zero or more workspaces. Following successful initialization the module has at least one workspace, named `default`. One workspace is set as the *current workspace* for the module. When you run a plan or apply on a module, it is created on its current workspace.
 

@@ -48,8 +48,29 @@ func TestConfig(t *testing.T) {
 					Logging: logging.Options{
 						Level: "info",
 					},
+					Includes: []string{"**/*"},
+					Excludes: []string{"**/.terraform", "**/.terragrunt-cache"},
 				}
 				assert.Equal(t, want, got)
+			},
+		},
+		{
+			"config file excludes replace default",
+			"exclude:\n  - modules\n  - \"**/examples/\"\n",
+			nil,
+			nil,
+			func(t *testing.T, got Config) {
+				assert.Equal(t, []string{"modules", "**/examples"}, got.Excludes)
+				assert.Equal(t, []string{"**/*"}, got.Includes)
+			},
+		},
+		{
+			"include flags",
+			"",
+			[]string{"--include", "./live/prod", "--include", "live/dev/**"},
+			nil,
+			func(t *testing.T, got Config) {
+				assert.Equal(t, []string{"live/prod", "live/dev/**"}, got.Includes)
 			},
 		},
 		{
@@ -170,6 +191,17 @@ func TestConfig(t *testing.T) {
 
 			tt.want(t, got)
 		})
+	}
+}
+
+func TestConfigInvalidPattern(t *testing.T) {
+	testutils.ResetEnv(t)
+	t.Setenv("HOME", t.TempDir())
+	testutils.ChTempDir(t, t.TempDir())
+
+	for _, args := range [][]string{{"--include", "[a"}, {"--exclude", ""}} {
+		_, err := Parse(io.Discard, args)
+		assert.ErrorContains(t, err, "invalid glob pattern")
 	}
 }
 

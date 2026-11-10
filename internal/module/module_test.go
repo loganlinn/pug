@@ -18,7 +18,7 @@ func TestNew(t *testing.T) {
 
 func TestFindModules(t *testing.T) {
 	workdir, _ := internal.NewWorkdir("./testdata/modules")
-	modules, errch := find(context.Background(), workdir)
+	modules, errch := find(context.Background(), workdir, []string{"**/*"}, []string{"**/.terraform"})
 
 	var got []Options
 	for opts := range modules {
@@ -39,4 +39,66 @@ func TestFindModules(t *testing.T) {
 	assert.Contains(t, goterr.Error(), "Unclosed configuration block")
 	_, closed := <-errch
 	assert.False(t, closed)
+}
+
+func TestFindModules_IncludeExclude(t *testing.T) {
+	tests := []struct {
+		name     string
+		includes []string
+		excludes []string
+		want     []string
+	}{
+		{
+			name:     "exclude",
+			includes: []string{"**/*"},
+			excludes: []string{"with_*"},
+			want:     []string{"terragrunt_with_local", "terragrunt_without_backend", "multiple_tf_files"},
+		},
+		{
+			name:     "include",
+			includes: []string{"terragrunt_*"},
+			want:     []string{"terragrunt_with_local", "terragrunt_without_backend"},
+		},
+		{
+			name:     "exclude takes precedence over include",
+			includes: []string{"terragrunt_*"},
+			excludes: []string{"*_without_*"},
+			want:     []string{"terragrunt_with_local"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workdir, _ := internal.NewWorkdir("./testdata/modules")
+			modules, _ := find(context.Background(), workdir, tt.includes, tt.excludes)
+
+			var got []string
+			for opts := range modules {
+				got = append(got, opts.Path)
+			}
+			assert.ElementsMatch(t, tt.want, got)
+		})
+	}
+}
+
+func TestMatches(t *testing.T) {
+	tests := []struct {
+		pattern string
+		dir     string
+		want    bool
+	}{
+		{"**/*", ".", true},
+		{"**/*", "a/b", true},
+		{"live", "live", true},
+		{"live", "live/prod/app", true},
+		{"live", "lively", false},
+		{"live/*", "live", false},
+		{"live/*", "live/prod/app", true},
+		{"**/.terraform", ".terraform", true},
+		{"**/.terraform", "a/.terraform/modules/b", true},
+		{"**/examples", "modules/vpc/examples/simple", true},
+		{"**/examples", "modules/vpc", false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, matches([]string{tt.pattern}, tt.dir), "pattern %q, dir %q", tt.pattern, tt.dir)
+	}
 }

@@ -22,6 +22,8 @@ type Service struct {
 	pluginCache bool
 	logger      logging.Interface
 	terragrunt  bool
+	includes    []string
+	excludes    []string
 
 	*pubsub.Broker[*Module]
 }
@@ -32,6 +34,10 @@ type ServiceOptions struct {
 	PluginCache bool
 	Logger      logging.Interface
 	Terragrunt  bool
+	// Includes and Excludes are glob patterns of directories to include in,
+	// and exclude from, the search for modules.
+	Includes []string
+	Excludes []string
 }
 
 type taskCreator interface {
@@ -64,6 +70,8 @@ func NewService(opts ServiceOptions) *Service {
 		pluginCache: opts.PluginCache,
 		logger:      opts.Logger,
 		terragrunt:  opts.Terragrunt,
+		includes:    opts.Includes,
+		excludes:    opts.Excludes,
 	}
 }
 
@@ -73,7 +81,7 @@ func NewService(opts ServiceOptions) *Service {
 //
 // TODO: separate into Load and Reload
 func (s *Service) Reload() (added []string, removed []string, err error) {
-	ch, errc := find(context.TODO(), s.workdir)
+	ch, errc := find(context.TODO(), s.workdir, s.includes, s.excludes)
 	var found []string
 	for ch != nil || errc != nil {
 		select {

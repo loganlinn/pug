@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/leg100/pug/internal"
 	"github.com/leg100/pug/internal/cliconfig"
 	"github.com/leg100/pug/internal/logging"
@@ -28,9 +31,16 @@ type Config struct {
 	Args                    []string
 	Terragrunt              bool
 	Logging                 logging.Options
+	Includes                []string
+	Excludes                []string
 
 	Version bool
 }
+
+var (
+	defaultIncludes = []string{"**/*"}
+	defaultExcludes = []string{"**/.terraform", "**/.terragrunt-cache"}
+)
 
 // set config in order of precedence:
 // 1. flags > 2. env vars > 3. config file
@@ -56,6 +66,8 @@ func Parse(stderr io.Writer, args []string) (Config, error) {
 	_ = fs.String('c', "config", defaultConfigFile, "Path to config file.")
 
 	fs.BoolVar(&cfg.DisableReloadAfterApply, 0, "disable-reload-after-apply", "Disable automatic reload of state following an apply.")
+	fs.StringListVar(&cfg.Includes, 0, "include", fmt.Sprintf("Glob pattern of directories in which to search for modules. Can set more than once. (default: %s)", strings.Join(defaultIncludes, ",")))
+	fs.StringListVar(&cfg.Excludes, 0, "exclude", fmt.Sprintf("Glob pattern of directories to exclude from search for modules. Takes precedence over --include. Can set more than once. (default: %s)", strings.Join(defaultExcludes, ",")))
 
 	{
 		usage := fmt.Sprintf("Logging level (valid: %s).", strings.Join(logging.ValidLevels(), ","))
@@ -83,6 +95,23 @@ func Parse(stderr io.Writer, args []string) (Config, error) {
 	// terragrunt mode.
 	if cfg.Program == "terragrunt" {
 		cfg.Terragrunt = true
+	}
+
+	// Setting a list replaces its defaults, like any other flag.
+	if len(cfg.Includes) == 0 {
+		cfg.Includes = slices.Clone(defaultIncludes)
+	}
+	if len(cfg.Excludes) == 0 {
+		cfg.Excludes = slices.Clone(defaultExcludes)
+	}
+	for _, patterns := range [][]string{cfg.Includes, cfg.Excludes} {
+		for i, p := range patterns {
+			if p == "" || !doublestar.ValidatePattern(p) {
+				return Config{}, fmt.Errorf("invalid glob pattern: %q", p)
+			}
+			// Patterns match paths relative to workdir, e.g. "./modules/" -> "modules".
+			patterns[i] = path.Clean(p)
+		}
 	}
 
 	// Perform any conversions from the flag parsed primitive types to pug

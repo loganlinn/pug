@@ -58,6 +58,8 @@ func New(cfg Config) (*App, error) {
 		PluginCache: cfg.PluginCache,
 		Logger:      logger,
 		Terragrunt:  cfg.Terragrunt,
+		Includes:    cfg.Includes,
+		Excludes:    cfg.Excludes,
 	})
 	workspaces := workspace.NewService(workspace.ServiceOptions{
 		Tasks:   tasks,

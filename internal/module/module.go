@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -68,12 +69,15 @@ func (m *Module) Dependencies() []resource.ID {
 // contains a backend or cloud block, or in the case of terragrunt, a
 // terragrunt.hcl file.
 //
+// Only directories matching includes and not matching excludes are searched;
+// excludes take precedence, and excluded directories are not descended into.
+//
 // find returns two channels: the first streams discovered modules (in the form
 // of Options structs for creating the module in pug); the second streams any
 // errors encountered.
 //
 // When finished, both channels are closed.
-func find(ctx context.Context, workdir internal.Workdir) (<-chan Options, <-chan error) {
+func find(ctx context.Context, workdir internal.Workdir, includes, excludes []string) (<-chan Options, <-chan error) {
 	modules := make(chan Options)
 	errc := make(chan error, 1)
 
@@ -84,9 +88,14 @@ func find(ctx context.Context, workdir internal.Workdir) (<-chan Options, <-chan
 				errc <- err
 				return err
 			}
+			// Strip workdir from path
+			rel, err := workdir.Rel(path)
+			if err != nil {
+				errc <- err
+				return err
+			}
 			if d.IsDir() {
-				switch d.Name() {
-				case ".terraform", ".terragrunt-cache":
+				if matches(excludes, rel) {
 					return filepath.SkipDir
 				}
 				return nil
@@ -98,6 +107,10 @@ func find(ctx context.Context, workdir internal.Workdir) (<-chan Options, <-chan
 				isTerragrunt = true
 				fallthrough
 			case filepath.Ext(path) == ".tf":
+				dir := filepath.Dir(rel)
+				if !matches(includes, dir) {
+					break
+				}
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
@@ -111,14 +124,8 @@ func find(ctx context.Context, workdir internal.Workdir) (<-chan Options, <-chan
 						// backend config, so skip.
 						return
 					}
-					// Strip workdir from module path
-					stripped, err := filepath.Rel(workdir.String(), filepath.Dir(path))
-					if err != nil {
-						errc <- err
-						return
-					}
 					modules <- Options{
-						Path:    stripped,
+						Path:    dir,
 						Backend: backend,
 					}
 				}()
@@ -141,6 +148,19 @@ func find(ctx context.Context, workdir internal.Workdir) (<-chan Options, <-chan
 		}()
 	}()
 	return modules, errc
+}
+
+// matches reports whether the relative directory path dir, or any of its
+// ancestors, matches any of the glob patterns, i.e. a pattern matching a
+// directory applies to everything beneath it.
+func matches(patterns []string, dir string) bool {
+	dir = filepath.ToSlash(dir)
+	for _, p := range patterns {
+		if doublestar.MatchUnvalidated(p, dir) || doublestar.MatchUnvalidated(p+"/**", dir) {
+			return true
+		}
+	}
+	return false
 }
 
 type terragrunt struct {
