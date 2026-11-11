@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/charlievieth/fastwalk"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -83,7 +84,9 @@ func find(ctx context.Context, workdir internal.Workdir, includes, excludes []st
 
 	go func() {
 		var wg sync.WaitGroup
-		err := filepath.WalkDir(workdir.String(), func(path string, d fs.DirEntry, err error) error {
+		// fastwalk calls the func concurrently; everything it touches must be
+		// safe for concurrent use.
+		err := fastwalk.Walk(&fastwalk.Config{}, workdir.String(), func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				errc <- err
 				return err

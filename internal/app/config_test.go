@@ -55,12 +55,12 @@ func TestConfig(t *testing.T) {
 			},
 		},
 		{
-			"config file excludes replace default",
+			"config file excludes added to defaults",
 			"exclude:\n  - modules\n  - \"**/examples/\"\n",
 			nil,
 			nil,
 			func(t *testing.T, got Config) {
-				assert.Equal(t, []string{"modules", "**/examples"}, got.Excludes)
+				assert.Equal(t, []string{"**/.terraform", "**/.terragrunt-cache", "modules", "**/examples"}, got.Excludes)
 				assert.Equal(t, []string{"**/*"}, got.Includes)
 			},
 		},

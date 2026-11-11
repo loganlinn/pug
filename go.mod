@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	github.com/awalterschulze/gographviz v2.0.3+incompatible
 	github.com/bmatcuk/doublestar/v4 v4.10.4
+	github.com/charlievieth/fastwalk v1.0.14
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0

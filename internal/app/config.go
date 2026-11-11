@@ -67,7 +67,7 @@ func Parse(stderr io.Writer, args []string) (Config, error) {
 
 	fs.BoolVar(&cfg.DisableReloadAfterApply, 0, "disable-reload-after-apply", "Disable automatic reload of state following an apply.")
 	fs.StringListVar(&cfg.Includes, 0, "include", fmt.Sprintf("Glob pattern of directories in which to search for modules. Can set more than once. (default: %s)", strings.Join(defaultIncludes, ",")))
-	fs.StringListVar(&cfg.Excludes, 0, "exclude", fmt.Sprintf("Glob pattern of directories to exclude from search for modules. Takes precedence over --include. Can set more than once. (default: %s)", strings.Join(defaultExcludes, ",")))
+	fs.StringListVar(&cfg.Excludes, 0, "exclude", fmt.Sprintf("Glob pattern of directories to exclude from search for modules, in addition to %s. Takes precedence over --include. Can set more than once.", strings.Join(defaultExcludes, ",")))
 
 	{
 		usage := fmt.Sprintf("Logging level (valid: %s).", strings.Join(logging.ValidLevels(), ","))
@@ -97,13 +97,12 @@ func Parse(stderr io.Writer, args []string) (Config, error) {
 		cfg.Terragrunt = true
 	}
 
-	// Setting a list replaces its defaults, like any other flag.
+	// Setting includes replaces the default; excludes are added to the
+	// defaults, which are always applied.
 	if len(cfg.Includes) == 0 {
 		cfg.Includes = slices.Clone(defaultIncludes)
 	}
-	if len(cfg.Excludes) == 0 {
-		cfg.Excludes = slices.Clone(defaultExcludes)
-	}
+	cfg.Excludes = append(slices.Clone(defaultExcludes), cfg.Excludes...)
 	for _, patterns := range [][]string{cfg.Includes, cfg.Excludes} {
 		for i, p := range patterns {
 			if p == "" || !doublestar.ValidatePattern(p) {
